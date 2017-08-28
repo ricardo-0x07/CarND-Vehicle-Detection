@@ -9,21 +9,13 @@ from keras.layers.convolutional import Conv2D
 from keras.layers.pooling import MaxPooling2D
 import sklearn
 from sklearn.model_selection import train_test_split
-
-samples = []
-# Open and read csv file
-with open('./data/set3/driving_log.csv') as csvfile:
-    reader = csv.reader(csvfile)
-    for line in reader:
-        samples.append(line)
-
 import os
 import glob
 dirs = os.listdir("../data/vehicles/")
 cars = []
 print(dirs)
 for image_type in dirs:
-    cars.extend(glob.glob('../data/vehicles/'+ image_type+'/*'))
+    cars.extend(glob.glob('../data/vehicles/'+ image_type+'/*.jpg'))
     
 print('Number of Vehicles Images found', len(cars))
 
@@ -32,12 +24,13 @@ dirs = os.listdir("../data/non-vehicles/")
 notcars = []
 print(dirs)
 for image_type in dirs:
-    notcars.extend(glob.glob('../data/non-vehicles/'+ image_type+'/*'))
+    notcars.extend(glob.glob('../data/non-vehicles/'+ image_type+'/*.jpg'))
     
 print('Number of Non-Vehicles Images found', len(notcars))
-y = np.hstack((np.ones(len(cars)),np.zeros(len(notcars))))
-X = np.vstack((cars, notcars)).astype(np.float)
-
+y = np.concatenate((np.ones(len(cars)),np.zeros(len(notcars))))
+X = np.concatenate((cars, notcars))
+print('X.shape',X.shape)
+print('y.shape',y.shape)
 X_train, X_test, y_train, y_test = train_test_split(X,y, test_size=0.2)
 
 def resize_function(image):
@@ -48,10 +41,9 @@ def resize_function(image):
     image = cv2.resize(image, (64, 64), interpolation = cv2.INTER_AREA)
     return  image
 
-def generator(X, y, batch_size=32):
+def generator(X, y, batch_size=1024):
     num_samples = len(X)
     while 1: # Loop forever so the generator never terminates
-        shuffle(samples)
         for offset in range(0, num_samples, batch_size):
             batch_X = X[offset:offset+batch_size]
             batch_y = y[offset:offset+batch_size]
@@ -64,7 +56,7 @@ def generator(X, y, batch_size=32):
 
             # trim image to only see section with road
             X_train = np.array(images)
-            y_train = np.array(y)
+            y_train = np.array(batch_y)
             yield sklearn.utils.shuffle(X_train, y_train)
 
 # compile and train the model using the generator function
@@ -102,12 +94,12 @@ model.add(Dropout(0.20))
 model.add(Dense(10, activation='elu'))
 model.add(Dropout(0.5))
 
-model.add(Dense(1), activation='sigmoid')
+model.add(Dense(1, activation='sigmoid'))
 # Print model summary
 model.summary()
 # Compile model
 model.compile(loss='binary_crossentropy', optimizer='rmsprop', metrics=['accuracy'])
 # Run model
-model.fit_generator(train_generator, samples_per_epoch=len(train_samples), validation_data=validation_generator,nb_val_samples=len(validation_samples), nb_epoch=10)
+model.fit_generator(train_generator, steps_per_epoch=len(X_train)/1024, validation_data=validation_generator,validation_steps=len(X_test)/1024, epochs=100)
 # Save model
 model.save('model.h5')
